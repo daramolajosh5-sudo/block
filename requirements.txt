@@ -1,4 +1,4 @@
 aiogram>=3.10.0
 aiohttp>=3.9.5
 feedparser>=6.0.11
-duckduckgo_search>=6.0.0
+duckduckgo_search>=7.0.0
