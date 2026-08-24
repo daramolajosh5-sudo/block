@@ -4,7 +4,7 @@ import logging
 import os
 import aiohttp
 import feedparser
-from duckduckgo_search import AsyncDDGS
+from duckduckgo_search import DDGS
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
@@ -44,28 +44,27 @@ async def fetch_crypto_prices():
         logger.error(f"CoinGecko API Error: {e}")
         return None
 
-async def free_ai_chat(user_prompt: str) -> str:
-    """Asynchronously requests AI responses using DuckDuckGo's public proxy."""
+def _sync_ddg_chat(prompt: str) -> str:
+    """Synchronous execution of DuckDuckGo AI chat."""
     system_instruction = (
         "You are BlockWire AI, an expert cryptocurrency analyst and digital market assistant. "
         "Keep your answers clear, accurate, concise, and easy to read. "
         "Focus on crypto market trends, blockchain technology, trading concepts, and digital assets."
     )
-    full_prompt = f"{system_instruction}\n\nUser Question: {user_prompt}"
+    full_prompt = f"{system_instruction}\n\nUser Question: {prompt}"
     
+    with DDGS() as ddgs:
+        response = ddgs.chat(full_prompt, model="gpt-4o-mini")
+        return response
+
+async def free_ai_chat(user_prompt: str) -> str:
+    """Non-blocking async wrapper around DDGS.chat."""
     try:
-        async with AsyncDDGS() as ddgs:
-            response = await asyncio.wait_for(
-                ddgs.achat(full_prompt, model="gpt-4o-mini"),
-                timeout=20.0
-            )
-            return response if response else "⚠️ I couldn't generate a response right now. Please try again."
-    except asyncio.TimeoutError:
-        logger.error("AI request timed out.")
-        return "⚠️ AI service timed out. Please ask your question again."
+        response = await asyncio.to_thread(_sync_ddg_chat, user_prompt)
+        return response if response else "⚠️ I couldn't generate a response right now. Please try again."
     except Exception as e:
         logger.error(f"Free AI Execution Error: {e}")
-        return "⚠️ I am currently receiving high volume. Please ask your question again in a moment!"
+        return "⚠️ AI service is busy. Please ask your question again in a moment!"
 
 
 # ------------------ BOT COMMAND HANDLERS ------------------ #
@@ -152,7 +151,6 @@ async def news_handler(event: types.Message | types.CallbackQuery):
 @dp.message(F.text & ~F.text.startswith("/"))
 async def chat_handler(message: types.Message):
     """Handles regular text queries for multi-user AI chat."""
-    # Send typing action so the user knows the AI is processing
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     
     ai_response = await free_ai_chat(message.text)
@@ -160,7 +158,6 @@ async def chat_handler(message: types.Message):
     try:
         await message.reply(html.escape(ai_response), parse_mode="HTML")
     except Exception:
-        # Fallback if HTML escaping or parsing fails
         await message.reply(ai_response)
 
 
@@ -168,7 +165,6 @@ async def chat_handler(message: types.Message):
 
 async def main():
     logger.info("Starting @BlockWire_bot application...")
-    # Drop updates sent while bot was offline to avoid hitting old rate limits
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
