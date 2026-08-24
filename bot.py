@@ -8,7 +8,7 @@ from duckduckgo_search import DDGS
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +23,7 @@ if not BOT_TOKEN:
     raise ValueError("CRITICAL ERROR: BOT_TOKEN variable is missing on Railway!")
 
 CRYPTO_RSS_URL = "https://cointelegraph.com/rss"
+WELCOME_IMAGE_PATH = "welcome.png"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -71,7 +72,7 @@ async def free_ai_chat(user_prompt: str) -> str:
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
-    """Responds to /start command with interactive menu."""
+    """Responds to /start command with welcome banner image and interactive menu."""
     welcome_text = (
         "⚡ <b>Welcome to BlockWire Terminal!</b>\n\n"
         "Your interactive portal for live market data, breaking crypto news, and AI insights.\n\n"
@@ -88,7 +89,22 @@ async def start_handler(message: types.Message):
         ]
     ])
     
-    await message.answer(welcome_text, parse_mode="HTML", reply_markup=keyboard)
+    try:
+        photo = FSInputFile(WELCOME_IMAGE_PATH)
+        await message.answer_photo(
+            photo=photo,
+            caption=welcome_text,
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logger.error(f"Failed to send welcome image: {e}")
+        # Fallback to text message if welcome.png is missing
+        await message.answer(
+            text=welcome_text,
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
 
 
 @dp.message(Command("prices"))
